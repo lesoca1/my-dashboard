@@ -433,7 +433,7 @@ export default function Home() {
     <main className="dashboard">
       {/* ── Header ──────────────────────────────────────────────── */}
       <header className="header fade-in">
-        <div className="logo">Applied HMM Models and Bayesian frameworks on prediction markets - Leonardo Sorensen</div>
+        <div className="logo">Leonardo Sorensen</div>
         {connected ? (
           <button className="wallet-btn connected" onClick={handleDisconnect} title="Click to disconnect">
             <span className="wallet-dot"></span>
@@ -610,7 +610,7 @@ export default function Home() {
 
       {/* ── Footer ──────────────────────────────────────────────── */}
       <footer className="footer">
-        <div className="footer-left">lcsorensen.org</div>
+        <div className="footer-left">Applied HMM Models and Bayesian frameworks on prediction markets</div>
         <div className="footer-links">
           <a href="https://polymarket.com" target="_blank" rel="noopener noreferrer" className="footer-link">
             Polymarket
