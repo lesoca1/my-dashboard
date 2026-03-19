@@ -25,7 +25,7 @@ export const notes: Note[] = [
       <p>
         Notes and commentary on
         <a href="https://github.com/romanmichaelpaolucci/Quant-Guild-Library/blob/main/2025%20Video%20Lectures/51.%20Hidden%20Markov%20Models%20for%20Quant%20Finance/hidden_markov_models.ipynb" target="_blank" rel="noopener noreferrer">
-        Lecture 51 from Roman Paolucci's Quant Guild Library</a> — applying Hidden Markov Models
+        Lecture 51 from Roman Paolucci's Quant Guild Library</a> applying Hidden Markov Models
         to detect market regimes in equity returns. The companion
         <a href="https://www.mdpi.com/1911-8074/13/12/311" target="_blank" rel="noopener noreferrer">MDPI paper</a>
         provides the academic foundation.
@@ -33,16 +33,16 @@ export const notes: Note[] = [
  
       <h3>The core idea</h3>
       <p>
-        Financial markets alternate between regimes — bull runs, bear crashes, and
-        sideways chop — but these states aren't directly observable. We only see
+        Financial markets alternate between regimes (bull runs, bear crashes, and
+        sideways chop) but these states aren't directly observable. We only see
         prices and volumes. A Hidden Markov Model treats the regime as a latent
         variable that influences the observable return distribution, and uses the
         Expectation-Maximization algorithm to learn:
       </p>
       <p>
-        (1) The <em>transition matrix</em> — probabilities of switching between regimes.<br/>
-        (2) The <em>emission parameters</em> — the mean and variance of returns in each regime.<br/>
-        (3) The <em>initial state distribution</em> — which regime we're likely starting in.
+        (1) The <em>transition matrix</em>: probabilities of switching between regimes.<br/>
+        (2) The <em>emission parameters</em>: the mean and variance of returns in each regime.<br/>
+        (3) The <em>initial state distribution</em>: which regime we're likely starting in.
       </p>
  
       <h3>Feature engineering</h3>
@@ -122,7 +122,7 @@ for i in range(model.n_components):
         After fitting, each state gets a label based on its characteristics. The state
         with the highest mean return and lowest volatility is typically the bull regime;
         the state with negative mean return and high volatility is the bear/crisis regime.
-        The transition matrix tells you the persistence of each regime — bear markets
+        The transition matrix tells you the persistence of each regime; bear markets
         tend to be short but violent, while bull regimes are longer and more stable.
       </p>
  
@@ -149,7 +149,7 @@ for i in range(model.n_components):
     return np.exp(log_alpha)</code></pre>
       <p>
         This gives you a probability vector at each time step: e.g., "72% bull, 20% neutral,
-        8% bear" — which you can use to dynamically adjust position sizing, hedge ratios, or
+        8% bear", which you can use to dynamically adjust position sizing, hedge ratios, or
         strategy selection.
       </p>
  
