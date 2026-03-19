@@ -11,12 +11,10 @@ export default function Home() {
       <hr className="nav-rule" />
 
       <main className="page-content fade-in">
-        <h1 className="home-name">Leonardo Sorensen</h1>
+        <h1 className="home-name">Leonardo Sørensen</h1>
 
         <p className="home-bio">
-          This is where I store public notes on topics I&apos;ve spent some time
-          thinking about — mostly prediction markets, quantitative modeling,
-          and Bayesian inference applied to event contracts.
+          This is where I store public notes on topics I&apos;ve spent some time thinking about.
         </p>
 
         <div className="home-links">

@@ -88,7 +88,7 @@ a:hover { color: var(--link-hover); }
    ═══════════════════════════════════════════════════════════════════════ */
 
 .site-container {
-  max-width: 640px;
+  max-width: 780px;
   margin: 0 auto;
   padding: 48px 24px;
 }
@@ -97,7 +97,7 @@ a:hover { color: var(--link-hover); }
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.fade-in { animation: fadeIn 0.5s ease-out both; }
+.fade-in { animation: fadeIn 0.05s ease-out both; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    NAVIGATION
@@ -120,7 +120,7 @@ a:hover { color: var(--link-hover); }
   text-decoration: none;
   color: var(--text-secondary);
   padding: 4px 0;
-  transition: color 0.15s;
+  transition: color 0.05s;
 }
 
 .nav-link:hover { color: var(--text); }
@@ -153,7 +153,7 @@ a:hover { color: var(--link-hover); }
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color 0.05s;
   border-radius: 4px;
 }
 
@@ -202,7 +202,7 @@ a:hover { color: var(--link-hover); }
   font-size: 15px;
   line-height: 1.7;
   margin-bottom: 20px;
-  max-width: 520px;
+  max-width: 720px;
 }
 
 .home-links {
@@ -356,7 +356,7 @@ a:hover { color: var(--link-hover); }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-height: 40vh;
+  min-height: 20vh;
   justify-content: center;
 }
 
@@ -710,4 +710,46 @@ a:hover { color: var(--link-hover); }
   .tk-metric-value { font-size: 16px; }
   .tk-input-group { flex-direction: column; }
   .timeline-item { flex-direction: column; gap: 2px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CHART FIGURES (for notes with embedded visualizations)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.chart-figure {
+  margin: 28px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chart-figure-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 12px 16px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-figure-legend {
+  display: flex;
+  gap: 10px;
+  font-size: 10px;
+}
+
+.chart-figure-legend span {
+  margin-right: 2px;
+}
+
+.chart-figure-area {
+  position: relative;
+  height: 240px;
+  padding: 8px;
+}
+
+.chart-figure-area.chart-figure-small {
+  height: 180px;
 }
