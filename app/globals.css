@@ -1,26 +1,655 @@
-@import "tailwindcss";
+/* ── Reset & Variables ─────────────────────────────────────────────────── */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #171717;
+  --bg-card: #141414;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --text-primary: #e8e8e8;
+  --text-secondary: #808080;
+  --text-tertiary: #505050;
+  --green: #22c55e;
+  --green-dim: rgba(34, 197, 94, 0.12);
+  --green-text: #4ade80;
+  --red: #ef4444;
+  --red-dim: rgba(239, 68, 68, 0.12);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "DM Sans", sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+/* ── Dashboard Container ──────────────────────────────────────────────── */
+
+.dashboard {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+/* ── Animations ───────────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-out both;
+}
+
+/* ── Section Labels ───────────────────────────────────────────────────── */
+
+.section-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 16px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 48px;
+  padding-bottom: 24px;
+  border-bottom: 0.5px solid var(--border);
+}
+
+.logo {
+  font-family: "Space Mono", monospace;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.wallet-btn {
+  font-family: "DM Sans", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0.5px solid var(--border);
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.wallet-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.wallet-btn.connected {
+  border-color: rgba(34, 197, 94, 0.3);
+  color: var(--green-text);
+}
+
+.wallet-btn.connected:hover {
+  border-color: var(--green);
+}
+
+.wallet-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 8px;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ── Metrics Grid ─────────────────────────────────────────────────────── */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 48px;
+}
+
+.metric {
+  background: var(--bg-primary);
+  padding: 24px;
+}
+
+.metric-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-family: "Space Mono", monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-value.positive {
+  color: var(--green-text);
+}
+
+.metric-value.negative {
+  color: var(--red);
+}
+
+.metric-sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  font-family: "Space Mono", monospace;
+}
+
+/* ── Chart ─────────────────────────────────────────────────────────────── */
+
+.chart-section {
+  margin-bottom: 48px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.chart-tabs {
+  display: flex;
+  gap: 0;
+  border: 0.5px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.chart-tab {
+  font-family: "DM Sans", sans-serif;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.05s;
+  border-right: 0.5px solid var(--border);
+}
+
+.chart-tab:last-child {
+  border-right: none;
+}
+
+.chart-tab:hover {
+  color: var(--text-secondary);
+}
+
+.chart-tab.active {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.chart-area {
+  position: relative;
+  height: 240px;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ── Positions Table ──────────────────────────────────────────────────── */
+
+.positions-section {
+  margin-bottom: 48px;
+}
+
+.positions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.pos-count {
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.positions-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.positions-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  font-weight: 400;
+  border-bottom: 0.5px solid var(--border);
+}
+
+.positions-table th:last-child {
+  text-align: right;
+}
+
+.positions-table td {
+  font-size: 13px;
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.positions-table tr:last-child td {
+  border-bottom: none;
+}
+
+.positions-table td:last-child {
+  text-align: right;
+}
+
+.positions-table tbody tr {
+  transition: background 0.15s;
+}
+
+.positions-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.market-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.platform-tag {
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 2px;
+  margin-left: 8px;
+  display: inline-block;
+}
+
+.platform-tag.kalshi {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-tertiary);
+}
+
+.platform-tag.poly {
+  background: var(--green-dim);
+  color: var(--green-text);
+}
+
+.side-yes {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--green-text);
+  background: var(--green-dim);
+  padding: 2px 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.side-no {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--red);
+  background: var(--red-dim);
+  padding: 2px 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.pnl-positive {
+  color: var(--green-text);
+  font-family: "Space Mono", monospace;
+  font-size: 13px;
+}
+
+.pnl-negative {
+  color: var(--red);
+  font-family: "Space Mono", monospace;
+  font-size: 13px;
+}
+
+/* ── Activity Feed ────────────────────────────────────────────────────── */
+
+.activity-section {
+  margin-bottom: 48px;
+}
+
+.activity-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--border);
+  transition: opacity 0.05s;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-item:hover {
+  opacity: 0.8;
+}
+
+.activity-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.activity-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.activity-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.activity-dot.buy {
+  background: var(--green);
+}
+
+.activity-dot.sell {
+  background: var(--red);
+}
+
+.activity-market {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.activity-detail {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: "Space Mono", monospace;
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+
+.footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-left {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.footer-links {
+  display: flex;
+  gap: 24px;
+}
+
+.footer-link {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  transition: color 0.15s;
+  cursor: pointer;
+}
+
+.footer-link:hover {
+  color: var(--text-secondary);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .header {
+    margin-bottom: 32px;
+  }
+
+  .positions-table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .activity-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .activity-right {
+    padding-left: 16px;
+  }
+
+  .footer {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard {
+    padding: 24px 16px;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-value {
+    font-size: 18px;
+  }
+
+  .positions-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* ══ ADD THIS TO THE BOTTOM OF YOUR EXISTING globals.css ══════════════ */
+
+/* ══ REPLACE the previous empty-state CSS block with this ═════════════ */
+
+/* ── Empty State ──────────────────────────────────────────────────────── */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.empty-icon {
+  margin-bottom: 24px;
+  opacity: 0.5;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  max-width: 400px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.address-input-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 12px;
+}
+
+.address-input {
+  flex: 1;
+  font-family: "Space Mono", monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--border);
+  padding: 10px 16px;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.address-input:focus {
+  border-color: var(--border-hover);
+}
+
+.address-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.empty-btn {
+  font-family: "DM Sans", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--bg-primary);
+  background: var(--green);
+  border: none;
+  padding: 10px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.empty-btn:hover {
+  background: var(--green-text);
+}
+
+.empty-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-error {
+  font-size: 12px;
+  color: var(--red);
+  margin-bottom: 8px;
+}
+
+.empty-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 8px;
+}
+
+.empty-hint a {
+  color: var(--green-text);
+  text-decoration: none;
+}
+
+.empty-hint a:hover {
+  text-decoration: underline;
+}
+
+.header-tagline {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+}
+
+.empty-portfolio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 30vh;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .address-input-group {
+    flex-direction: column;
+  }
 }

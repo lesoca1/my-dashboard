@@ -1,8 +1,596 @@
-export default function Home() {
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+
+/* ═══════════════════════════════════════════════════════════════════════
+   POLYMARKET DATA API
+   All endpoints are public — no authentication needed.
+   Docs: https://docs.polymarket.com
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const DATA_API = "https://data-api.polymarket.com";
+const GAMMA_API = "https://gamma-api.polymarket.com";
+
+interface Position {
+  proxyWallet: string;
+  asset: string;
+  conditionId: string;
+  size: number;
+  avgPrice: number;
+  initialValue: number;
+  currentValue: number;
+  cashPnl: number;
+  percentPnl: number;
+  totalBought: number;
+  realizedPnl: number;
+  curPrice: number;
+  redeemable: boolean;
+  title: string;
+  slug: string;
+  icon: string;
+  eventSlug: string;
+  outcome: string;
+  outcomeIndex: number;
+  endDate: string;
+}
+
+interface Activity {
+  proxyWallet: string;
+  timestamp: number;
+  conditionId: string;
+  type: string;
+  size: number;
+  usdcSize: number;
+  transactionHash: string;
+  price: number;
+  side: string;
+  outcomeIndex: number;
+  title: string;
+  slug: string;
+  outcome: string;
+}
+
+interface ProfileData {
+  name: string;
+  pseudonym: string;
+  bio: string;
+  profileImage: string;
+  proxyWallet: string;
+}
+
+interface PortfolioValue {
+  value: number;
+}
+
+async function fetchPositions(address: string): Promise<Position[]> {
+  const res = await fetch(
+    `${DATA_API}/positions?user=${address}&sizeThreshold=0&limit=500`
+  );
+  if (!res.ok) throw new Error("Failed to fetch positions");
+  return res.json();
+}
+
+async function fetchActivity(address: string): Promise<Activity[]> {
+  const res = await fetch(
+    `${DATA_API}/activity?user=${address}&limit=50`
+  );
+  if (!res.ok) throw new Error("Failed to fetch activity");
+  return res.json();
+}
+
+async function fetchPortfolioValue(address: string): Promise<number> {
+  const res = await fetch(
+    `${DATA_API}/value?user=${address}`
+  );
+  if (!res.ok) return 0;
+  const data: PortfolioValue = await res.json();
+  return data.value || 0;
+}
+
+async function fetchProfile(address: string): Promise<ProfileData | null> {
+  try {
+    const res = await fetch(
+      `${GAMMA_API}/profiles/${address}`
+    );
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UTILS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function fmt(n: number): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function fmtUsd(n: number): string {
+  return "$" + fmt(Math.abs(n));
+}
+
+function timeAgo(timestamp: number): string {
+  const seconds = Math.floor(Date.now() / 1000 - timestamp);
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return Math.floor(seconds / 60) + "m ago";
+  if (seconds < 86400) return Math.floor(seconds / 3600) + "h ago";
+  if (seconds < 604800) return Math.floor(seconds / 86400) + "d ago";
+  return Math.floor(seconds / 604800) + "w ago";
+}
+
+function isValidAddress(addr: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(addr);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EQUITY CHART — built from real trade history
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function EquityChart({ activities }: { activities: Activity[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!activities.length) return;
+    let cancelled = false;
+
+    async function loadChart() {
+      const ChartModule = await import("chart.js");
+      const { Chart, registerables } = ChartModule;
+      Chart.register(...registerables);
+
+      if (cancelled || !canvasRef.current) return;
+      if (chartRef.current) chartRef.current.destroy();
+
+      // Build cumulative P&L from trade history (oldest first)
+      const sorted = [...activities]
+        .filter((a) => a.type === "TRADE")
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      if (!sorted.length) return;
+
+      let cumPnl = 0;
+      const labels: string[] = [];
+      const data: number[] = [];
+
+      sorted.forEach((trade) => {
+        const isBuy = trade.side === "BUY";
+        // Approximate P&L: for buys, cost = size * price; for sells, revenue = size * price
+        cumPnl += isBuy ? -(trade.usdcSize || 0) : (trade.usdcSize || 0);
+        const date = new Date(trade.timestamp * 1000);
+        labels.push(
+          date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        );
+        data.push(Math.round(cumPnl * 100) / 100);
+      });
+
+      const ctx = canvasRef.current.getContext("2d");
+      if (!ctx) return;
+
+      const isPositive = data[data.length - 1] >= 0;
+      const lineColor = isPositive ? "#22C55E" : "#EF4444";
+
+      chartRef.current = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              data,
+              borderColor: lineColor,
+              borderWidth: 1.5,
+              backgroundColor: (context: any) => {
+                const g = context.chart.ctx.createLinearGradient(0, 0, 0, 240);
+                g.addColorStop(0, isPositive ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)");
+                g.addColorStop(1, isPositive ? "rgba(34,197,94,0)" : "rgba(239,68,68,0)");
+                return g;
+              },
+              fill: true,
+              tension: 0.35,
+              pointRadius: 0,
+              pointHoverRadius: 3,
+              pointHoverBackgroundColor: lineColor,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { left: 16, right: 16, top: 16, bottom: 8 } },
+          scales: {
+            x: {
+              display: true,
+              grid: { color: "rgba(255,255,255,0.03)" },
+              ticks: {
+                color: "#404040",
+                font: { family: "'Space Mono', monospace", size: 10 },
+                maxTicksLimit: 6,
+              },
+              border: { display: false },
+            },
+            y: {
+              display: true,
+              position: "right" as const,
+              grid: { color: "rgba(255,255,255,0.03)" },
+              ticks: {
+                color: "#404040",
+                font: { family: "'Space Mono', monospace", size: 10 },
+                callback: (v: any) => "$" + Number(v).toFixed(0),
+              },
+              border: { display: false },
+            },
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#1a1a1a",
+              borderColor: "rgba(255,255,255,0.08)",
+              borderWidth: 0.5,
+              titleFont: { family: "'Space Mono', monospace", size: 11 },
+              bodyFont: { family: "'Space Mono', monospace", size: 12 },
+              titleColor: "#808080",
+              bodyColor: "#e8e8e8",
+              padding: 10,
+              cornerRadius: 4,
+              displayColors: false,
+              callbacks: {
+                label: (ctx: any) => "$" + fmt(ctx.parsed.y),
+              },
+            },
+          },
+          interaction: { intersect: false, mode: "index" as const },
+        },
+      });
+    }
+
+    loadChart();
+    return () => {
+      cancelled = true;
+      if (chartRef.current) chartRef.current.destroy();
+    };
+  }, [activities]);
+
+  if (!activities.filter((a) => a.type === "TRADE").length) {
+    return (
+      <div className="chart-area" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "#505050", fontSize: 13 }}>No trade history yet</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-8">
-      <h1 className="text-4xl font-bold mb-4">My Dashboard</h1>
-      <p className="text-gray-400">Welcome to my interactive app.</p>
+    <div className="chart-area">
+      <canvas ref={canvasRef}></canvas>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function EmptyState({
+  onSubmit,
+  inputValue,
+  setInputValue,
+  error,
+  loading,
+}: {
+  onSubmit: () => void;
+  inputValue: string;
+  setInputValue: (v: string) => void;
+  error: string;
+  loading: boolean;
+}) {
+  return (
+    <div className="empty-state fade-in">
+      <div className="empty-icon">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="4" y="12" width="40" height="28" rx="4" stroke="#505050" strokeWidth="1.5" />
+          <path d="M4 20h40" stroke="#505050" strokeWidth="1.5" />
+          <circle cx="34" cy="30" r="4" stroke="#505050" strokeWidth="1.5" />
+        </svg>
+      </div>
+      <div className="empty-title">Track your Polymarket portfolio</div>
+      <div className="empty-desc">
+        Enter your Polymarket wallet address to view your positions, P&L, and trade history. All data is fetched from Polymarket&apos;s public API.
+      </div>
+      <div className="address-input-group">
+        <input
+          type="text"
+          className="address-input"
+          placeholder="0x..."
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value.trim())}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <button
+          className="empty-btn"
+          onClick={onSubmit}
+          disabled={loading}
+        >
+          {loading ? "Loading..." : "Load portfolio"}
+        </button>
+      </div>
+      {error && <div className="input-error">{error}</div>}
+      <div className="empty-hint">
+        Don&apos;t have one? Find any wallet on the{" "}
+        <a href="https://polymarket.com/leaderboard" target="_blank" rel="noopener noreferrer">
+          Polymarket leaderboard
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MAIN PAGE
+   ═══════════════════════════════════════════════════════════════════════ */
+
+export default function Home() {
+  const [walletAddress, setWalletAddress] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [portfolioValue, setPortfolioValue] = useState(0);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const loadPortfolio = useCallback(async () => {
+    const addr = inputValue;
+    if (!isValidAddress(addr)) {
+      setError("Invalid address. Must be 0x followed by 40 hex characters.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const [pos, act, val, prof] = await Promise.all([
+        fetchPositions(addr),
+        fetchActivity(addr),
+        fetchPortfolioValue(addr),
+        fetchProfile(addr),
+      ]);
+
+      setPositions(pos);
+      setActivities(act);
+      setPortfolioValue(val);
+      setProfile(prof);
+      setWalletAddress(addr);
+      setConnected(true);
+    } catch (err) {
+      setError("Failed to fetch data. Check the address and try again.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [inputValue]);
+
+  const handleDisconnect = () => {
+    setConnected(false);
+    setWalletAddress("");
+    setInputValue("");
+    setPositions([]);
+    setActivities([]);
+    setPortfolioValue(0);
+    setProfile(null);
+  };
+
+  // Computed metrics from real data
+  const totalPnl = positions.reduce((sum, p) => sum + (p.cashPnl || 0), 0);
+  const totalInvested = positions.reduce((sum, p) => sum + (p.initialValue || 0), 0);
+  const pnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+  const openCount = positions.filter((p) => p.size > 0 && !p.redeemable).length;
+  const displayName =
+    profile?.pseudonym || profile?.name || walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4);
+
+  return (
+    <main className="dashboard">
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <header className="header fade-in">
+        <div className="logo">lcsorensen</div>
+        {connected ? (
+          <button className="wallet-btn connected" onClick={handleDisconnect} title="Click to disconnect">
+            <span className="wallet-dot"></span>
+            {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+          </button>
+        ) : (
+          <span className="header-tagline">prediction market tracker</span>
+        )}
+      </header>
+
+      {/* ── Show empty state OR dashboard ───────────────────────── */}
+      {!connected ? (
+        <EmptyState
+          onSubmit={loadPortfolio}
+          inputValue={inputValue}
+          setInputValue={setInputValue}
+          error={error}
+          loading={loading}
+        />
+      ) : (
+        <>
+          {/* ── Metrics ─────────────────────────────────────────── */}
+          <section className="fade-in" style={{ animationDelay: "0.1s" }}>
+            <div className="section-label">
+              Portfolio overview
+              {profile?.pseudonym && (
+                <span style={{ marginLeft: 8, color: "#808080", textTransform: "none", letterSpacing: 0 }}>
+                  — {profile.pseudonym}
+                </span>
+              )}
+            </div>
+            <div className="metrics">
+              <div className="metric">
+                <div className="metric-label">Portfolio value</div>
+                <div className="metric-value">
+                  {mounted ? fmtUsd(portfolioValue) : "—"}
+                </div>
+                <div className="metric-sub">current positions</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Unrealized P&L</div>
+                <div className={`metric-value ${totalPnl >= 0 ? "positive" : "negative"}`}>
+                  {totalPnl >= 0 ? "+" : "-"}{mounted ? fmtUsd(totalPnl) : "—"}
+                </div>
+                <div className="metric-sub">
+                  {pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(1)}% on open
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Open positions</div>
+                <div className="metric-value">{openCount}</div>
+                <div className="metric-sub">{positions.length} total tracked</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Total invested</div>
+                <div className="metric-value">
+                  {mounted ? fmtUsd(totalInvested) : "—"}
+                </div>
+                <div className="metric-sub">initial cost basis</div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Equity Chart ────────────────────────────────────── */}
+          <section className="fade-in" style={{ animationDelay: "0.2s" }}>
+            <div className="chart-section">
+              <div className="chart-header">
+                <div className="section-label" style={{ marginBottom: 0 }}>
+                  Cumulative trade flow
+                </div>
+              </div>
+              {mounted && <EquityChart activities={activities} />}
+            </div>
+          </section>
+
+          {/* ── Positions Table ─────────────────────────────────── */}
+          {positions.length > 0 && (
+            <section className="fade-in" style={{ animationDelay: "0.3s" }}>
+              <div className="positions-section">
+                <div className="positions-header">
+                  <div className="section-label" style={{ marginBottom: 0 }}>
+                    Positions
+                  </div>
+                  <div className="pos-count">{openCount} open</div>
+                </div>
+                <table className="positions-table">
+                  <thead>
+                    <tr>
+                      <th>Market</th>
+                      <th>Outcome</th>
+                      <th>Avg price</th>
+                      <th>Current</th>
+                      <th>Size</th>
+                      <th>P&L</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {positions
+                      .filter((p) => p.size > 0)
+                      .sort((a, b) => Math.abs(b.cashPnl) - Math.abs(a.cashPnl))
+                      .map((pos, i) => (
+                        <tr key={pos.conditionId + pos.outcome + i}>
+                          <td>
+                            <a
+                              href={`https://polymarket.com/event/${pos.eventSlug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="market-name"
+                              style={{ textDecoration: "none" }}
+                            >
+                              {pos.title}
+                            </a>
+                          </td>
+                          <td>
+                            <span className={pos.outcome === "Yes" ? "side-yes" : "side-no"}>
+                              {pos.outcome}
+                            </span>
+                          </td>
+                          <td>${(pos.avgPrice || 0).toFixed(2)}</td>
+                          <td>${(pos.curPrice || 0).toFixed(2)}</td>
+                          <td>{mounted ? fmt(pos.size) : "—"} shares</td>
+                          <td>
+                            <span className={(pos.cashPnl || 0) >= 0 ? "pnl-positive" : "pnl-negative"}>
+                              {(pos.cashPnl || 0) >= 0 ? "+" : ""}
+                              {mounted ? fmtUsd(pos.cashPnl || 0) : "—"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* ── Activity Feed ───────────────────────────────────── */}
+          {activities.length > 0 && (
+            <section className="fade-in" style={{ animationDelay: "0.4s" }}>
+              <div className="activity-section">
+                <div className="section-label">Recent activity</div>
+                {activities.slice(0, 15).map((act, i) => (
+                  <div className="activity-item" key={act.transactionHash + i}>
+                    <div className="activity-left">
+                      <div className={`activity-dot ${act.side === "BUY" ? "buy" : "sell"}`}></div>
+                      <span className="activity-market">
+                        {act.side === "BUY" ? "Bought" : "Sold"} {act.outcome} — {act.title}
+                      </span>
+                    </div>
+                    <div className="activity-right">
+                      <span className="activity-detail">
+                        {fmt(act.size)} @ ${(act.price || 0).toFixed(2)}
+                      </span>
+                      <span className="activity-time">{timeAgo(act.timestamp)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Empty portfolio message ─────────────────────────── */}
+          {positions.length === 0 && activities.length === 0 && (
+            <section className="fade-in" style={{ animationDelay: "0.2s" }}>
+              <div className="empty-portfolio">
+                <div className="empty-title" style={{ fontSize: 16 }}>No positions found</div>
+                <div className="empty-desc">
+                  This wallet has no open positions or trade history on Polymarket.
+                </div>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* ── Footer ──────────────────────────────────────────────── */}
+      <footer className="footer">
+        <div className="footer-left">lcsorensen.org</div>
+        <div className="footer-links">
+          <a href="https://polymarket.com" target="_blank" rel="noopener noreferrer" className="footer-link">
+            Polymarket
+          </a>
+          <a href="https://github.com/lesoca1" target="_blank" rel="noopener noreferrer" className="footer-link">
+            GitHub
+          </a>
+        </div>
+      </footer>
+    </main>
   );
 }
