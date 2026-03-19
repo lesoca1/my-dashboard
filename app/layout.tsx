@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "lcsorensen — Prediction Market Dashboard",
-  description: "Kalshi & Polymarket portfolio tracker",
+  title: "Test",
+  description: "Polymarket portfolio tracker",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

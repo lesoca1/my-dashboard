@@ -410,7 +410,7 @@ export default function Home() {
       setLoading(false);
     }
   }, [inputValue]);
-  
+
   const handleDisconnect = () => {
     setConnected(false);
     setWalletAddress("");
@@ -433,7 +433,7 @@ export default function Home() {
     <main className="dashboard">
       {/* ── Header ──────────────────────────────────────────────── */}
       <header className="header fade-in">
-        <div className="logo">lcsorensen</div>
+        <div className="logo">Applied HMM Models and Bayesian frameworks on prediction markets - Leonardo Sorensen</div>
         {connected ? (
           <button className="wallet-btn connected" onClick={handleDisconnect} title="Click to disconnect">
             <span className="wallet-dot"></span>
