@@ -11,10 +11,10 @@ export default function Home() {
       <hr className="nav-rule" />
 
       <main className="page-content fade-in">
-        <h1 className="home-name">Leonardo Sørensen</h1>
+        <h1 className="home-name">AlgoTrading Project</h1>
 
         <p className="home-bio">
-          This is where I store public notes on topics I&apos;ve spent some time thinking about.
+          Respository of notes, comments and progress updates on topics related to algorithmic trading, and its implementations on prediction markets and alike.
         </p>
 
         <div className="home-links">
