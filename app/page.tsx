@@ -1,16 +1,9 @@
-import Nav from "./components/Nav";
+import Nav from "@/app/components/Nav";
 import Link from "next/link";
-import { getAllNotes } from "./lib/notes";
+import { getAllNotes, type Note } from "@/app/lib/notes";
 
 export default function Home() {
-  const notes = getAllNotes();
-
-  // Group notes by date label (e.g. "March 2026")
-  const grouped = notes.reduce<Record<string, typeof notes>>((acc, note) => {
-    if (!acc[note.date]) acc[note.date] = [];
-    acc[note.date].push(note);
-    return acc;
-  }, {});
+  const allNotes: Note[] = getAllNotes();
 
   return (
     <>
@@ -43,16 +36,14 @@ export default function Home() {
         <hr className="section-rule" />
 
         <ul className="notes-timeline">
-          {Object.entries(grouped).map(([date, items]) =>
-            items.map((note) => (
-              <li key={note.slug} className="timeline-item">
-                <span className="timeline-date">{note.date}:</span>
-                <Link href={`/notes/${note.slug}`} className="timeline-link">
-                  {note.title}
-                </Link>
-              </li>
-            ))
-          )}
+          {allNotes.map((note: Note) => (
+            <li key={note.slug} className="timeline-item">
+              <span className="timeline-date">{note.date}:</span>
+              <Link href={`/notes/${note.slug}`} className="timeline-link">
+                {note.title}
+              </Link>
+            </li>
+          ))}
         </ul>
       </main>
     </>

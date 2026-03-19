@@ -1,22 +1,19 @@
-import Nav from "../../components/Nav";
+import Nav from "@/app/components/Nav";
 import Link from "next/link";
-import { getNoteBySlug, getAllNotes } from "../../lib/notes";
+import { getNoteBySlug, getAllNotes } from "@/app/lib/notes";
 import { notFound } from "next/navigation";
 
-/** Pre-generate all note pages at build time */
 export function generateStaticParams() {
   return getAllNotes().map((note) => ({ slug: note.slug }));
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }) {
-  const note = getNoteBySlug(params.slug);
-  return {
-    title: note ? `${note.title} — Leonardo Sorensen` : "Note not found",
-  };
-}
-
-export default function NotePage({ params }: { params: { slug: string } }) {
-  const note = getNoteBySlug(params.slug);
+export default async function NotePage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const note = getNoteBySlug(slug);
 
   if (!note) {
     notFound();

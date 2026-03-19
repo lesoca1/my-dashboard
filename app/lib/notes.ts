@@ -1,9 +1,7 @@
 /**
  * Notes data store.
- *
  * To add a new note, push an object to the array below.
- * Content supports basic HTML — paragraphs, links, images, code blocks.
- * Notes are displayed newest-first on the homepage and /notes page.
+ * Content supports HTML. Notes display newest-first.
  */
 
 export interface Note {

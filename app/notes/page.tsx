@@ -1,13 +1,13 @@
-import Nav from "../components/Nav";
+import Nav from "@/app/components/Nav";
 import Link from "next/link";
-import { getAllNotes } from "../lib/notes";
+import { getAllNotes, type Note } from "@/app/lib/notes";
 
 export const metadata = {
   title: "Notes — Leonardo Sorensen",
 };
 
 export default function NotesPage() {
-  const notes = getAllNotes();
+  const allNotes: Note[] = getAllNotes();
 
   return (
     <>
@@ -20,7 +20,7 @@ export default function NotesPage() {
         <hr className="section-rule" />
 
         <ul className="notes-timeline">
-          {notes.map((note) => (
+          {allNotes.map((note: Note) => (
             <li key={note.slug} className="timeline-item">
               <span className="timeline-date">{note.date}:</span>
               <Link href={`/notes/${note.slug}`} className="timeline-link">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import Nav from "../components/Nav";
+import Nav from "@/app/components/Nav";
 
 /* ═══════════════════════════════════════════════════════════════════════
    POLYMARKET DATA API
@@ -306,7 +306,6 @@ export default function TrackerPage() {
 
       <main className="page-content fade-in">
         {!connected ? (
-          /* ── Empty State ─────────────────────────────────────── */
           <div className="tk-empty">
             <h1 className="page-title">Portfolio Tracker</h1>
             <p className="tk-empty-desc">
@@ -327,15 +326,11 @@ export default function TrackerPage() {
             {error && <div className="tk-error">{error}</div>}
             <p className="tk-hint">
               Find any wallet on the{" "}
-              <a href="https://polymarket.com/leaderboard" target="_blank" rel="noopener noreferrer">
-                Polymarket leaderboard
-              </a>
+              <a href="https://polymarket.com/leaderboard" target="_blank" rel="noopener noreferrer">Polymarket leaderboard</a>
             </p>
           </div>
         ) : (
-          /* ── Dashboard ───────────────────────────────────────── */
           <>
-            {/* Identity */}
             <div className="tk-identity">
               {displayImage && (
                 <img src={displayImage} alt={displayName} className="tk-avatar"
@@ -345,12 +340,9 @@ export default function TrackerPage() {
                 <div className="tk-name">{displayName}</div>
                 <div className="tk-addr">{walletAddress}</div>
               </div>
-              <button className="tk-disconnect" onClick={disconnect} title="Disconnect">
-                &times;
-              </button>
+              <button className="tk-disconnect" onClick={disconnect} title="Disconnect">&times;</button>
             </div>
 
-            {/* Metrics */}
             <div className="tk-metrics">
               <div className="tk-metric">
                 <div className="tk-metric-label">Portfolio value</div>
@@ -376,10 +368,8 @@ export default function TrackerPage() {
               </div>
             </div>
 
-            {/* Chart */}
             {mounted && <PnlChart activities={activities} period={chartPeriod} setPeriod={setChartPeriod} />}
 
-            {/* Open Positions */}
             {openPos.length > 0 && (
               <div className="tk-table-section">
                 <div className="tk-table-header">
@@ -409,7 +399,6 @@ export default function TrackerPage() {
               </div>
             )}
 
-            {/* Closed Positions */}
             {sortCl.length > 0 && (
               <div className="tk-table-section">
                 <div className="tk-table-header">
@@ -438,7 +427,6 @@ export default function TrackerPage() {
               </div>
             )}
 
-            {/* Activity */}
             {activities.length > 0 && (
               <div className="tk-table-section">
                 <div className="tk-section-label">Recent activity</div>
