@@ -89,11 +89,13 @@ async function fetchPortfolioValue(address: string): Promise<number> {
 
 async function fetchProfile(address: string): Promise<ProfileData | null> {
   try {
+    // Try the Gamma API profiles endpoint
     const res = await fetch(
-      `${GAMMA_API}/profiles/${address}`
+      `https://gamma-api.polymarket.com/profiles/${address}`
     );
     if (!res.ok) return null;
-    return res.json();
+    const data = await res.json();
+    return data;
   } catch {
     return null;
   }
@@ -356,21 +358,48 @@ export default function Home() {
       setError("Invalid address. Must be 0x followed by 40 hex characters.");
       return;
     }
-
+ 
     setError("");
     setLoading(true);
-
+ 
     try {
-      const [pos, act, val, prof] = await Promise.all([
-        fetchPositions(addr),
-        fetchActivity(addr),
-        fetchPortfolioValue(addr),
-        fetchProfile(addr),
+      // Step 1: Fetch profile to get the proxy wallet address
+      // The address the user enters might be their profile address,
+      // but Polymarket's Data API needs the proxy wallet address.
+      const prof = await fetchProfile(addr);
+      
+      // Use the proxy wallet from profile if available, otherwise use the input address
+      const dataAddress = prof?.proxyWallet || addr;
+ 
+      // Step 2: Fetch all data using the resolved address
+      // Try both the input address and proxy wallet for positions/activity
+      const [pos, act, val] = await Promise.all([
+        fetchPositions(dataAddress).catch(() => [] as Position[]),
+        fetchActivity(dataAddress).catch(() => [] as Activity[]),
+        fetchPortfolioValue(dataAddress).catch(() => 0),
       ]);
-
-      setPositions(pos);
-      setActivities(act);
-      setPortfolioValue(val);
+ 
+      // If proxy wallet returned nothing, try the original address too
+      let finalPos = pos;
+      let finalAct = act;
+      let finalVal = val;
+ 
+      if (pos.length === 0 && act.length === 0 && dataAddress !== addr) {
+        const [pos2, act2, val2] = await Promise.all([
+          fetchPositions(addr).catch(() => [] as Position[]),
+          fetchActivity(addr).catch(() => [] as Activity[]),
+          fetchPortfolioValue(addr).catch(() => 0),
+        ]);
+        if (pos2.length > 0 || act2.length > 0) {
+          finalPos = pos2;
+          finalAct = act2;
+          finalVal = val2;
+        }
+      }
+ 
+      setPositions(finalPos);
+      setActivities(finalAct);
+      setPortfolioValue(finalVal);
       setProfile(prof);
       setWalletAddress(addr);
       setConnected(true);
@@ -381,7 +410,7 @@ export default function Home() {
       setLoading(false);
     }
   }, [inputValue]);
-
+  
   const handleDisconnect = () => {
     setConnected(false);
     setWalletAddress("");
@@ -430,9 +459,9 @@ export default function Home() {
           <section className="fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="section-label">
               Portfolio overview
-              {profile?.pseudonym && (
+              {(profile?.pseudonym || profile?.name) && (
                 <span style={{ marginLeft: 8, color: "#808080", textTransform: "none", letterSpacing: 0 }}>
-                  — {profile.pseudonym}
+                  — {profile?.pseudonym || profile?.name}
                 </span>
               )}
             </div>
