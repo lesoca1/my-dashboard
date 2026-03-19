@@ -16,14 +16,14 @@
   --green-text: #4ade80;
   --red: #ef4444;
   --red-dim: rgba(239, 68, 68, 0.12);
+  --blue: #3b82f6;
+  --blue-dim: rgba(59, 130, 246, 0.12);
   --chart-grid: rgba(255, 255, 255, 0.03);
   --chart-tick: #404040;
   --chart-tooltip-bg: #1a1a1a;
   --chart-tooltip-border: rgba(255, 255, 255, 0.08);
   --chart-tooltip-title: #808080;
   --chart-tooltip-body: #e8e8e8;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 [data-theme="light"] {
@@ -41,14 +41,14 @@
   --green-text: #15803d;
   --red: #dc2626;
   --red-dim: rgba(220, 38, 38, 0.08);
+  --blue: #2563eb;
+  --blue-dim: rgba(37, 99, 235, 0.08);
   --chart-grid: rgba(0, 0, 0, 0.04);
   --chart-tick: #999999;
   --chart-tooltip-bg: #ffffff;
   --chart-tooltip-border: rgba(0, 0, 0, 0.1);
   --chart-tooltip-title: #636363;
   --chart-tooltip-body: #1a1a1a;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 *,
@@ -83,14 +83,8 @@ body {
 /* ── Animations ───────────────────────────────────────────────────────── */
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .fade-in {
@@ -170,13 +164,8 @@ body {
 }
 
 @keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
 }
 
 /* ── Theme Toggle ─────────────────────────────────────────────────────── */
@@ -277,13 +266,8 @@ body {
   color: var(--text-primary);
 }
 
-.metric-value.positive {
-  color: var(--green-text);
-}
-
-.metric-value.negative {
-  color: var(--red);
-}
+.metric-value.positive { color: var(--green-text); }
+.metric-value.negative { color: var(--red); }
 
 .metric-sub {
   font-size: 11px;
@@ -429,6 +413,30 @@ body {
   font-size: 12px;
 }
 
+/* ── View More Button ─────────────────────────────────────────────────── */
+
+.view-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 0;
+  font-family: "DM Sans", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0.5px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.view-more-btn:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-hover);
+  background: var(--bg-secondary);
+}
+
 /* ── Activity Feed ────────────────────────────────────────────────────── */
 
 .activity-section {
@@ -471,13 +479,9 @@ body {
   flex-shrink: 0;
 }
 
-.activity-dot.buy {
-  background: var(--green);
-}
-
-.activity-dot.sell {
-  background: var(--red);
-}
+.activity-dot.buy    { background: var(--green); }
+.activity-dot.sell   { background: var(--red); }
+.activity-dot.redeem { background: var(--blue); }
 
 .activity-market {
   font-size: 13px;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════════
    POLYMARKET DATA API
@@ -56,7 +56,7 @@ interface Activity {
   proxyWallet: string;
   timestamp: number;
   conditionId: string;
-  type: string;
+  type: string;       // TRADE, SPLIT, MERGE, REDEEM, REWARD, CONVERSION
   size: number;
   usdcSize: number;
   transactionHash: string;
@@ -66,6 +66,10 @@ interface Activity {
   title: string;
   slug: string;
   outcome: string;
+  // Profile fields returned with activity data
+  name?: string;
+  pseudonym?: string;
+  profileImage?: string;
 }
 
 interface ProfileData {
@@ -79,6 +83,8 @@ interface ProfileData {
 interface PortfolioValue {
   value: number;
 }
+
+/* ── Data fetchers ──────────────────────────────────────────────────── */
 
 async function fetchPositions(address: string): Promise<Position[]> {
   const res = await fetch(
@@ -96,18 +102,38 @@ async function fetchClosedPositions(address: string): Promise<ClosedPosition[]> 
   return res.json();
 }
 
-async function fetchActivity(address: string): Promise<Activity[]> {
-  const res = await fetch(
-    `${DATA_API}/activity?user=${address}&limit=200`
-  );
-  if (!res.ok) throw new Error("Failed to fetch activity");
-  return res.json();
+/**
+ * Paginate through ALL activity to get complete trade history.
+ * This is critical for accurate P&L — Polymarket computes
+ * P&L from the full transaction ledger, not position snapshots.
+ */
+async function fetchAllActivity(address: string): Promise<Activity[]> {
+  const all: Activity[] = [];
+  const PAGE = 500;
+
+  for (let page = 0; page < 20; page++) {
+    const res = await fetch(
+      `${DATA_API}/activity?user=${address}&limit=${PAGE}&offset=${page * PAGE}`
+    );
+    if (!res.ok) break;
+    const batch: Activity[] = await res.json();
+    if (batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+
+  // Deduplicate by transactionHash + conditionId + outcomeIndex
+  const seen = new Set<string>();
+  return all.filter((a) => {
+    const key = `${a.transactionHash}:${a.conditionId}:${a.outcomeIndex}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function fetchPortfolioValue(address: string): Promise<number> {
-  const res = await fetch(
-    `${DATA_API}/value?user=${address}`
-  );
+  const res = await fetch(`${DATA_API}/value?user=${address}`);
   if (!res.ok) return 0;
   const data: PortfolioValue = await res.json();
   return data.value || 0;
@@ -115,12 +141,9 @@ async function fetchPortfolioValue(address: string): Promise<number> {
 
 async function fetchProfile(address: string): Promise<ProfileData | null> {
   try {
-    const res = await fetch(
-      `${GAMMA_API}/profiles/${address}`
-    );
+    const res = await fetch(`${GAMMA_API}/profiles/${address}`);
     if (!res.ok) return null;
-    const data = await res.json();
-    return data;
+    return res.json();
   } catch {
     return null;
   }
@@ -152,6 +175,18 @@ function timeAgo(timestamp: number): string {
 
 function isValidAddress(addr: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(addr);
+}
+
+type ChartPeriod = "1D" | "1W" | "1M" | "ALL";
+
+function getPeriodCutoff(period: ChartPeriod): number {
+  const now = Math.floor(Date.now() / 1000);
+  switch (period) {
+    case "1D":  return now - 86400;
+    case "1W":  return now - 7 * 86400;
+    case "1M":  return now - 30 * 86400;
+    case "ALL": return 0;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -186,15 +221,30 @@ function ThemeToggle({ theme, setTheme }: { theme: string; setTheme: (t: string)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   EQUITY CHART — built from real trade history
+   P&L CHART — Matches Polymarket's Profit/Loss calculation
+
+   Polymarket P&L = cumulative cash flow + current portfolio value.
+   Cash flow: BUYs are outflows, SELLs/REDEEMs/REWARDs are inflows.
    ═══════════════════════════════════════════════════════════════════════ */
 
-function EquityChart({ activities }: { activities: Activity[] }) {
+function PnlChart({
+  activities,
+  period,
+  setPeriod,
+}: {
+  activities: Activity[];
+  period: ChartPeriod;
+  setPeriod: (p: ChartPeriod) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!activities.length) return;
+    const relevantEvents = activities.filter(
+      (a) => a.type === "TRADE" || a.type === "REDEEM" || a.type === "REWARD"
+    );
+    if (!relevantEvents.length) return;
+
     let cancelled = false;
 
     async function loadChart() {
@@ -205,63 +255,92 @@ function EquityChart({ activities }: { activities: Activity[] }) {
       if (cancelled || !canvasRef.current) return;
       if (chartRef.current) chartRef.current.destroy();
 
-      const sorted = [...activities]
-        .filter((a) => a.type === "TRADE")
-        .sort((a, b) => a.timestamp - b.timestamp);
+      const cutoff = getPeriodCutoff(period);
 
-      if (!sorted.length) return;
+      // Sort oldest first
+      const sorted = [...relevantEvents].sort((a, b) => a.timestamp - b.timestamp);
 
+      // Build the FULL cumulative P&L series first
       let cumPnl = 0;
-      const labels: string[] = [];
-      const data: number[] = [];
+      const fullSeries: { ts: number; pnl: number }[] = [];
 
-      sorted.forEach((trade) => {
-        const isBuy = trade.side === "BUY";
-        cumPnl += isBuy ? -(trade.usdcSize || 0) : (trade.usdcSize || 0);
-        const date = new Date(trade.timestamp * 1000);
-        labels.push(
-          date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        );
-        data.push(Math.round(cumPnl * 100) / 100);
+      sorted.forEach((event) => {
+        if (event.type === "TRADE") {
+          cumPnl += event.side === "BUY"
+            ? -(event.usdcSize || 0)
+            : (event.usdcSize || 0);
+        } else if (event.type === "REDEEM" || event.type === "REWARD") {
+          cumPnl += event.usdcSize || 0;
+        }
+        fullSeries.push({ ts: event.timestamp, pnl: Math.round(cumPnl * 100) / 100 });
       });
+
+      // For period-filtered views: slice and re-baseline to 0
+      let displaySeries = fullSeries;
+      let baselineOffset = 0;
+
+      if (period !== "ALL" && cutoff > 0) {
+        const cutoffIdx = fullSeries.findIndex((p) => p.ts >= cutoff);
+        if (cutoffIdx > 0) {
+          baselineOffset = fullSeries[cutoffIdx - 1].pnl;
+          displaySeries = fullSeries.slice(cutoffIdx);
+        } else if (cutoffIdx === -1) {
+          // All data is before cutoff — no activity in this period
+          displaySeries = [];
+        }
+      }
+
+      if (!displaySeries.length) {
+        if (chartRef.current) chartRef.current.destroy();
+        chartRef.current = null;
+        return;
+      }
+
+      const labels = displaySeries.map((p) => {
+        const d = new Date(p.ts * 1000);
+        if (period === "1D") {
+          return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        }
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      });
+
+      const data = displaySeries.map((p) => p.pnl - baselineOffset);
 
       const ctx = canvasRef.current.getContext("2d");
       if (!ctx) return;
 
-      const isPositive = data[data.length - 1] >= 0;
+      const lastVal = data[data.length - 1];
+      const isPositive = lastVal >= 0;
       const lineColor = isPositive ? "#22C55E" : "#EF4444";
 
-      // Read CSS variables for theming
-      const computedStyle = getComputedStyle(document.documentElement);
-      const gridColor = computedStyle.getPropertyValue("--chart-grid").trim() || "rgba(255,255,255,0.03)";
-      const tickColor = computedStyle.getPropertyValue("--chart-tick").trim() || "#404040";
-      const tooltipBg = computedStyle.getPropertyValue("--chart-tooltip-bg").trim() || "#1a1a1a";
-      const tooltipBorder = computedStyle.getPropertyValue("--chart-tooltip-border").trim() || "rgba(255,255,255,0.08)";
-      const tooltipTitle = computedStyle.getPropertyValue("--chart-tooltip-title").trim() || "#808080";
-      const tooltipBody = computedStyle.getPropertyValue("--chart-tooltip-body").trim() || "#e8e8e8";
+      const cs = getComputedStyle(document.documentElement);
+      const gridColor = cs.getPropertyValue("--chart-grid").trim() || "rgba(255,255,255,0.03)";
+      const tickColor = cs.getPropertyValue("--chart-tick").trim() || "#404040";
+      const tooltipBg = cs.getPropertyValue("--chart-tooltip-bg").trim() || "#1a1a1a";
+      const tooltipBorder = cs.getPropertyValue("--chart-tooltip-border").trim() || "rgba(255,255,255,0.08)";
+      const tooltipTitle = cs.getPropertyValue("--chart-tooltip-title").trim() || "#808080";
+      const tooltipBody = cs.getPropertyValue("--chart-tooltip-body").trim() || "#e8e8e8";
 
       chartRef.current = new Chart(ctx, {
         type: "line",
         data: {
           labels,
-          datasets: [
-            {
-              data,
-              borderColor: lineColor,
-              borderWidth: 1.5,
-              backgroundColor: (context: any) => {
-                const g = context.chart.ctx.createLinearGradient(0, 0, 0, 240);
-                g.addColorStop(0, isPositive ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)");
-                g.addColorStop(1, isPositive ? "rgba(34,197,94,0)" : "rgba(239,68,68,0)");
-                return g;
-              },
-              fill: true,
-              tension: 0.35,
-              pointRadius: 0,
-              pointHoverRadius: 3,
-              pointHoverBackgroundColor: lineColor,
+          datasets: [{
+            data,
+            borderColor: lineColor,
+            borderWidth: 1.5,
+            backgroundColor: (context: any) => {
+              const g = context.chart.ctx.createLinearGradient(0, 0, 0, 240);
+              g.addColorStop(0, isPositive ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)");
+              g.addColorStop(1, isPositive ? "rgba(34,197,94,0)" : "rgba(239,68,68,0)");
+              return g;
             },
-          ],
+            fill: true,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            pointHoverBackgroundColor: lineColor,
+          }],
         },
         options: {
           responsive: true,
@@ -271,22 +350,14 @@ function EquityChart({ activities }: { activities: Activity[] }) {
             x: {
               display: true,
               grid: { color: gridColor },
-              ticks: {
-                color: tickColor,
-                font: { family: "'Space Mono', monospace", size: 10 },
-                maxTicksLimit: 6,
-              },
+              ticks: { color: tickColor, font: { family: "'Space Mono', monospace", size: 10 }, maxTicksLimit: 6 },
               border: { display: false },
             },
             y: {
               display: true,
               position: "right" as const,
               grid: { color: gridColor },
-              ticks: {
-                color: tickColor,
-                font: { family: "'Space Mono', monospace", size: 10 },
-                callback: (v: any) => "$" + Number(v).toFixed(0),
-              },
+              ticks: { color: tickColor, font: { family: "'Space Mono', monospace", size: 10 }, callback: (v: any) => "$" + Number(v).toFixed(0) },
               border: { display: false },
             },
           },
@@ -304,7 +375,10 @@ function EquityChart({ activities }: { activities: Activity[] }) {
               cornerRadius: 4,
               displayColors: false,
               callbacks: {
-                label: (ctx: any) => "$" + fmt(ctx.parsed.y),
+                label: (ctx: any) => {
+                  const val = ctx.parsed.y;
+                  return (val >= 0 ? "+" : "-") + "$" + fmt(Math.abs(val));
+                },
               },
             },
           },
@@ -318,19 +392,37 @@ function EquityChart({ activities }: { activities: Activity[] }) {
       cancelled = true;
       if (chartRef.current) chartRef.current.destroy();
     };
-  }, [activities]);
+  }, [activities, period]);
 
-  if (!activities.filter((a) => a.type === "TRADE").length) {
-    return (
-      <div className="chart-area" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ color: "var(--text-tertiary)", fontSize: 13 }}>No trade history yet</span>
-      </div>
-    );
-  }
+  const hasData = activities.some(
+    (a) => a.type === "TRADE" || a.type === "REDEEM" || a.type === "REWARD"
+  );
 
   return (
-    <div className="chart-area">
-      <canvas ref={canvasRef}></canvas>
+    <div className="chart-section">
+      <div className="chart-header">
+        <div className="section-label" style={{ marginBottom: 0 }}>Profit / Loss</div>
+        <div className="chart-tabs">
+          {(["1D", "1W", "1M", "ALL"] as ChartPeriod[]).map((p) => (
+            <button
+              key={p}
+              className={`chart-tab ${period === p ? "active" : ""}`}
+              onClick={() => setPeriod(p)}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      </div>
+      {hasData ? (
+        <div className="chart-area">
+          <canvas ref={canvasRef}></canvas>
+        </div>
+      ) : (
+        <div className="chart-area" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: "var(--text-tertiary)", fontSize: 13 }}>No trade history yet</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -340,11 +432,7 @@ function EquityChart({ activities }: { activities: Activity[] }) {
    ═══════════════════════════════════════════════════════════════════════ */
 
 function EmptyState({
-  onSubmit,
-  inputValue,
-  setInputValue,
-  error,
-  loading,
+  onSubmit, inputValue, setInputValue, error, loading,
 }: {
   onSubmit: () => void;
   inputValue: string;
@@ -363,7 +451,8 @@ function EmptyState({
       </div>
       <div className="empty-title">Track your Polymarket portfolio</div>
       <div className="empty-desc">
-        Enter your Polymarket wallet address to view your positions, P&L, and trade history. All data is fetched from Polymarket&apos;s public API.
+        Enter your Polymarket wallet address to view your positions, P&L, and trade history.
+        All data is fetched from Polymarket&apos;s public API.
       </div>
       <div className="address-input-group">
         <input
@@ -376,11 +465,7 @@ function EmptyState({
           spellCheck={false}
           autoComplete="off"
         />
-        <button
-          className="empty-btn"
-          onClick={onSubmit}
-          disabled={loading}
-        >
+        <button className="empty-btn" onClick={onSubmit} disabled={loading}>
           {loading ? "Loading..." : "Load portfolio"}
         </button>
       </div>
@@ -412,10 +497,12 @@ export default function Home() {
   const [connected, setConnected] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("ALL");
+  const [showAllPositions, setShowAllPositions] = useState(false);
+  const [showAllClosed, setShowAllClosed] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Load saved theme preference
     const savedTheme = localStorage.getItem("theme") || "dark";
     setTheme(savedTheme);
     document.documentElement.setAttribute("data-theme", savedTheme);
@@ -430,23 +517,20 @@ export default function Home() {
 
     setError("");
     setLoading(true);
+    setShowAllPositions(false);
+    setShowAllClosed(false);
 
     try {
-      // Step 1: Fetch profile to get the proxy wallet address
       const prof = await fetchProfile(addr);
-
-      // Use the proxy wallet from profile if available, otherwise use the input address
       const dataAddress = prof?.proxyWallet || addr;
 
-      // Step 2: Fetch all data using the resolved address
       const [pos, closed, act, val] = await Promise.all([
         fetchPositions(dataAddress).catch(() => [] as Position[]),
         fetchClosedPositions(dataAddress).catch(() => [] as ClosedPosition[]),
-        fetchActivity(dataAddress).catch(() => [] as Activity[]),
+        fetchAllActivity(dataAddress).catch(() => [] as Activity[]),
         fetchPortfolioValue(dataAddress).catch(() => 0),
       ]);
 
-      // If proxy wallet returned nothing, try the original address too
       let finalPos = pos;
       let finalClosed = closed;
       let finalAct = act;
@@ -456,7 +540,7 @@ export default function Home() {
         const [pos2, closed2, act2, val2] = await Promise.all([
           fetchPositions(addr).catch(() => [] as Position[]),
           fetchClosedPositions(addr).catch(() => [] as ClosedPosition[]),
-          fetchActivity(addr).catch(() => [] as Activity[]),
+          fetchAllActivity(addr).catch(() => [] as Activity[]),
           fetchPortfolioValue(addr).catch(() => 0),
         ]);
         if (pos2.length > 0 || closed2.length > 0 || act2.length > 0) {
@@ -493,35 +577,72 @@ export default function Home() {
     setProfile(null);
   };
 
-  // ── Computed metrics from BOTH open and closed positions ──
-  // Unrealized P&L: from open positions only
-  const unrealizedPnl = positions.reduce((sum, p) => sum + (p.cashPnl || 0), 0);
+  /* ── P&L from activity cash flow (matches Polymarket) ─────────────
+     Polymarket P&L = sum(cash inflows - cash outflows) + portfolio value.
+     BUY = outflow. SELL / REDEEM / REWARD = inflow.
+  ──────────────────────────────────────────────────────────────────── */
+  const { cashFlowPnl, totalSpent } = useMemo(() => {
+    let flow = 0;
+    let spent = 0;
+    activities.forEach((a) => {
+      if (a.type === "TRADE") {
+        if (a.side === "BUY") {
+          flow -= a.usdcSize || 0;
+          spent += a.usdcSize || 0;
+        } else {
+          flow += a.usdcSize || 0;
+        }
+      } else if (a.type === "REDEEM" || a.type === "REWARD") {
+        flow += a.usdcSize || 0;
+      }
+    });
+    return { cashFlowPnl: flow, totalSpent: spent };
+  }, [activities]);
 
-  // Realized P&L: from open positions' realizedPnl + all closed positions' realizedPnl
-  const realizedFromOpen = positions.reduce((sum, p) => sum + (p.realizedPnl || 0), 0);
-  const realizedFromClosed = closedPositions.reduce((sum, p) => sum + (p.realizedPnl || 0), 0);
-  const totalRealizedPnl = realizedFromOpen + realizedFromClosed;
-
-  // Total P&L: unrealized + realized
-  const totalPnl = unrealizedPnl + totalRealizedPnl;
-
-  // Total invested: from open positions' initialValue + closed positions' totalBought
-  const investedOpen = positions.reduce((sum, p) => sum + (p.initialValue || 0), 0);
-  const investedClosed = closedPositions.reduce((sum, p) => sum + (p.totalBought || 0), 0);
-  const totalInvested = investedOpen + investedClosed;
-
-  const pnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+  const totalPnl = cashFlowPnl + portfolioValue;
+  const pnlPercent = totalSpent > 0 ? (totalPnl / totalSpent) * 100 : 0;
   const openCount = positions.filter((p) => p.size > 0 && !p.redeemable).length;
   const totalMarkets = positions.length + closedPositions.length;
 
-  const displayName =
-    profile?.pseudonym || profile?.name || (walletAddress ? walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4) : "");
+  /* ── Resolve display name from profile OR activity data ───────────
+     The Gamma profile API often returns empty for proxy wallets.
+     Activity records include name/pseudonym as a reliable fallback.
+  ──────────────────────────────────────────────────────────────────── */
+  const { displayName, displayImage } = useMemo(() => {
+    const profName = profile?.pseudonym || profile?.name;
+    const profImage = profile?.profileImage;
+    const firstWithName = activities.find((a) => a.pseudonym || a.name);
+    const actName = firstWithName?.pseudonym || firstWithName?.name;
+    const actImage = firstWithName?.profileImage;
+    const truncated = walletAddress
+      ? walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4) : "";
+    return {
+      displayName: profName || actName || truncated,
+      displayImage: profImage || actImage || null,
+    };
+  }, [profile, activities, walletAddress]);
+
+  // Sorted lists for tables (with view-more)
+  const VISIBLE_LIMIT = 10;
+  const openPositions = useMemo(
+    () => positions.filter((p) => p.size > 0).sort((a, b) => Math.abs(b.cashPnl) - Math.abs(a.cashPnl)),
+    [positions]
+  );
+  const visiblePositions = showAllPositions ? openPositions : openPositions.slice(0, VISIBLE_LIMIT);
+  const hasMorePositions = openPositions.length > VISIBLE_LIMIT;
+
+  const sortedClosed = useMemo(
+    () => [...closedPositions].sort((a, b) => Math.abs(b.realizedPnl) - Math.abs(a.realizedPnl)),
+    [closedPositions]
+  );
+  const visibleClosed = showAllClosed ? sortedClosed : sortedClosed.slice(0, VISIBLE_LIMIT);
+  const hasMoreClosed = sortedClosed.length > VISIBLE_LIMIT;
 
   return (
     <main className="dashboard">
       {/* ── Header ──────────────────────────────────────────────── */}
       <header className="header fade-in">
-        <div className="logo">Leonardo Sorensen</div>
+        <div className="logo">PM Trading Strategies</div>
         <div className="header-right">
           {mounted && <ThemeToggle theme={theme} setTheme={setTheme} />}
           {connected ? (
@@ -535,7 +656,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ── Show empty state OR dashboard ───────────────────────── */}
       {!connected ? (
         <EmptyState
           onSubmit={loadPortfolio}
@@ -549,9 +669,9 @@ export default function Home() {
           {/* ── Wallet Identity Banner ──────────────────────────── */}
           <section className="fade-in" style={{ animationDelay: "0.05s" }}>
             <div className="wallet-identity">
-              {profile?.profileImage && (
+              {displayImage && (
                 <img
-                  src={profile.profileImage}
+                  src={displayImage}
                   alt={displayName}
                   className="wallet-avatar"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -559,9 +679,7 @@ export default function Home() {
               )}
               <div className="wallet-identity-info">
                 <div className="wallet-display-name">{displayName}</div>
-                <div className="wallet-address-full">
-                  {walletAddress}
-                </div>
+                <div className="wallet-address-full">{walletAddress}</div>
               </div>
             </div>
           </section>
@@ -572,19 +690,15 @@ export default function Home() {
             <div className="metrics">
               <div className="metric">
                 <div className="metric-label">Portfolio value</div>
-                <div className="metric-value">
-                  {mounted ? fmtUsd(portfolioValue) : "—"}
-                </div>
+                <div className="metric-value">{mounted ? fmtUsd(portfolioValue) : "—"}</div>
                 <div className="metric-sub">current positions</div>
               </div>
               <div className="metric">
-                <div className="metric-label">Total P&L</div>
+                <div className="metric-label">Profit / Loss</div>
                 <div className={`metric-value ${totalPnl >= 0 ? "positive" : "negative"}`}>
                   {totalPnl >= 0 ? "+" : "-"}{mounted ? fmtUsd(totalPnl) : "—"}
                 </div>
-                <div className="metric-sub">
-                  {pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(1)}% all-time
-                </div>
+                <div className="metric-sub">{pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(1)}% all-time</div>
               </div>
               <div className="metric">
                 <div className="metric-label">Open positions</div>
@@ -593,34 +707,23 @@ export default function Home() {
               </div>
               <div className="metric">
                 <div className="metric-label">Total invested</div>
-                <div className="metric-value">
-                  {mounted ? fmtUsd(totalInvested) : "—"}
-                </div>
-                <div className="metric-sub">initial cost basis</div>
+                <div className="metric-value">{mounted ? fmtUsd(totalSpent) : "—"}</div>
+                <div className="metric-sub">all-time cost basis</div>
               </div>
             </div>
           </section>
 
-          {/* ── Equity Chart ────────────────────────────────────── */}
+          {/* ── P&L Chart ───────────────────────────────────────── */}
           <section className="fade-in" style={{ animationDelay: "0.2s" }}>
-            <div className="chart-section">
-              <div className="chart-header">
-                <div className="section-label" style={{ marginBottom: 0 }}>
-                  Cumulative trade flow
-                </div>
-              </div>
-              {mounted && <EquityChart activities={activities} />}
-            </div>
+            {mounted && <PnlChart activities={activities} period={chartPeriod} setPeriod={setChartPeriod} />}
           </section>
 
           {/* ── Positions Table ─────────────────────────────────── */}
-          {positions.length > 0 && (
+          {openPositions.length > 0 && (
             <section className="fade-in" style={{ animationDelay: "0.3s" }}>
               <div className="positions-section">
                 <div className="positions-header">
-                  <div className="section-label" style={{ marginBottom: 0 }}>
-                    Positions
-                  </div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Positions</div>
                   <div className="pos-count">{openCount} open</div>
                 </div>
                 <table className="positions-table">
@@ -635,53 +738,42 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {positions
-                      .filter((p) => p.size > 0)
-                      .sort((a, b) => Math.abs(b.cashPnl) - Math.abs(a.cashPnl))
-                      .map((pos, i) => (
-                        <tr key={pos.conditionId + pos.outcome + i}>
-                          <td>
-                            <a
-                              href={`https://polymarket.com/event/${pos.eventSlug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="market-name"
-                              style={{ textDecoration: "none" }}
-                            >
-                              {pos.title}
-                            </a>
-                          </td>
-                          <td>
-                            <span className={pos.outcome === "Yes" ? "side-yes" : "side-no"}>
-                              {pos.outcome}
-                            </span>
-                          </td>
-                          <td>${(pos.avgPrice || 0).toFixed(2)}</td>
-                          <td>${(pos.curPrice || 0).toFixed(2)}</td>
-                          <td>{mounted ? fmt(pos.size) : "—"} shares</td>
-                          <td>
-                            <span className={(pos.cashPnl || 0) >= 0 ? "pnl-positive" : "pnl-negative"}>
-                              {(pos.cashPnl || 0) >= 0 ? "+" : ""}
-                              {mounted ? fmtUsd(pos.cashPnl || 0) : "—"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                    {visiblePositions.map((pos, i) => (
+                      <tr key={pos.conditionId + pos.outcome + i}>
+                        <td>
+                          <a href={`https://polymarket.com/event/${pos.eventSlug}`} target="_blank" rel="noopener noreferrer" className="market-name" style={{ textDecoration: "none" }}>
+                            {pos.title}
+                          </a>
+                        </td>
+                        <td><span className={pos.outcome === "Yes" ? "side-yes" : "side-no"}>{pos.outcome}</span></td>
+                        <td>${(pos.avgPrice || 0).toFixed(2)}</td>
+                        <td>${(pos.curPrice || 0).toFixed(2)}</td>
+                        <td>{mounted ? fmt(pos.size) : "—"} shares</td>
+                        <td>
+                          <span className={(pos.cashPnl || 0) >= 0 ? "pnl-positive" : "pnl-negative"}>
+                            {(pos.cashPnl || 0) >= 0 ? "+" : ""}{mounted ? fmtUsd(pos.cashPnl || 0) : "—"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
+                {hasMorePositions && (
+                  <button className="view-more-btn" onClick={() => setShowAllPositions(!showAllPositions)}>
+                    {showAllPositions ? "Show less" : `View all ${openPositions.length} positions`}
+                  </button>
+                )}
               </div>
             </section>
           )}
 
           {/* ── Closed Positions Table ──────────────────────────── */}
-          {closedPositions.length > 0 && (
+          {sortedClosed.length > 0 && (
             <section className="fade-in" style={{ animationDelay: "0.35s" }}>
               <div className="positions-section">
                 <div className="positions-header">
-                  <div className="section-label" style={{ marginBottom: 0 }}>
-                    Closed positions
-                  </div>
-                  <div className="pos-count">{closedPositions.length} settled</div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Closed positions</div>
+                  <div className="pos-count">{sortedClosed.length} settled</div>
                 </div>
                 <table className="positions-table">
                   <thead>
@@ -694,38 +786,30 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {closedPositions
-                      .sort((a, b) => Math.abs(b.realizedPnl) - Math.abs(a.realizedPnl))
-                      .map((pos, i) => (
-                        <tr key={pos.conditionId + pos.outcome + i}>
-                          <td>
-                            <a
-                              href={`https://polymarket.com/event/${pos.eventSlug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="market-name"
-                              style={{ textDecoration: "none" }}
-                            >
-                              {pos.title}
-                            </a>
-                          </td>
-                          <td>
-                            <span className={pos.outcome === "Yes" ? "side-yes" : "side-no"}>
-                              {pos.outcome}
-                            </span>
-                          </td>
-                          <td>${(pos.avgPrice || 0).toFixed(2)}</td>
-                          <td>{mounted ? fmtUsd(pos.totalBought || 0) : "—"}</td>
-                          <td>
-                            <span className={(pos.realizedPnl || 0) >= 0 ? "pnl-positive" : "pnl-negative"}>
-                              {(pos.realizedPnl || 0) >= 0 ? "+" : ""}
-                              {mounted ? fmtUsd(pos.realizedPnl || 0) : "—"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                    {visibleClosed.map((pos, i) => (
+                      <tr key={pos.conditionId + pos.outcome + i}>
+                        <td>
+                          <a href={`https://polymarket.com/event/${pos.eventSlug}`} target="_blank" rel="noopener noreferrer" className="market-name" style={{ textDecoration: "none" }}>
+                            {pos.title}
+                          </a>
+                        </td>
+                        <td><span className={pos.outcome === "Yes" ? "side-yes" : "side-no"}>{pos.outcome}</span></td>
+                        <td>${(pos.avgPrice || 0).toFixed(2)}</td>
+                        <td>{mounted ? fmtUsd(pos.totalBought || 0) : "—"}</td>
+                        <td>
+                          <span className={(pos.realizedPnl || 0) >= 0 ? "pnl-positive" : "pnl-negative"}>
+                            {(pos.realizedPnl || 0) >= 0 ? "+" : ""}{mounted ? fmtUsd(pos.realizedPnl || 0) : "—"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
+                {hasMoreClosed && (
+                  <button className="view-more-btn" onClick={() => setShowAllClosed(!showAllClosed)}>
+                    {showAllClosed ? "Show less" : `View all ${sortedClosed.length} closed positions`}
+                  </button>
+                )}
               </div>
             </section>
           )}
@@ -735,22 +819,29 @@ export default function Home() {
             <section className="fade-in" style={{ animationDelay: "0.4s" }}>
               <div className="activity-section">
                 <div className="section-label">Recent activity</div>
-                {activities.slice(0, 15).map((act, i) => (
-                  <div className="activity-item" key={act.transactionHash + i}>
-                    <div className="activity-left">
-                      <div className={`activity-dot ${act.side === "BUY" ? "buy" : "sell"}`}></div>
-                      <span className="activity-market">
-                        {act.side === "BUY" ? "Bought" : "Sold"} {act.outcome} — {act.title}
-                      </span>
+                {[...activities]
+                  .sort((a, b) => b.timestamp - a.timestamp)
+                  .slice(0, 15)
+                  .map((act, i) => (
+                    <div className="activity-item" key={act.transactionHash + act.conditionId + i}>
+                      <div className="activity-left">
+                        <div className={`activity-dot ${act.type === "REDEEM" ? "redeem" : act.side === "BUY" ? "buy" : "sell"}`}></div>
+                        <span className="activity-market">
+                          {act.type === "REDEEM"
+                            ? `Redeemed ${act.outcome}`
+                            : act.type === "TRADE"
+                              ? `${act.side === "BUY" ? "Bought" : "Sold"} ${act.outcome}`
+                              : `${act.type} ${act.outcome}`} — {act.title}
+                        </span>
+                      </div>
+                      <div className="activity-right">
+                        <span className="activity-detail">
+                          {act.type === "TRADE" ? `${fmt(act.size)} @ $${(act.price || 0).toFixed(2)}` : fmtUsd(act.usdcSize || 0)}
+                        </span>
+                        <span className="activity-time">{timeAgo(act.timestamp)}</span>
+                      </div>
                     </div>
-                    <div className="activity-right">
-                      <span className="activity-detail">
-                        {fmt(act.size)} @ ${(act.price || 0).toFixed(2)}
-                      </span>
-                      <span className="activity-time">{timeAgo(act.timestamp)}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </section>
           )}
@@ -760,9 +851,7 @@ export default function Home() {
             <section className="fade-in" style={{ animationDelay: "0.2s" }}>
               <div className="empty-portfolio">
                 <div className="empty-title" style={{ fontSize: 16 }}>No positions found</div>
-                <div className="empty-desc">
-                  This wallet has no open positions or trade history on Polymarket.
-                </div>
+                <div className="empty-desc">This wallet has no open positions or trade history on Polymarket.</div>
               </div>
             </section>
           )}
@@ -771,14 +860,10 @@ export default function Home() {
 
       {/* ── Footer ──────────────────────────────────────────────── */}
       <footer className="footer">
-        <div className="footer-left">Applied HMM Models and Bayesian frameworks on prediction markets</div>
+        <div className="footer-left">Leonardo Sorensen</div>
         <div className="footer-links">
-          <a href="https://polymarket.com" target="_blank" rel="noopener noreferrer" className="footer-link">
-            Polymarket
-          </a>
-          <a href="https://github.com/lesoca1" target="_blank" rel="noopener noreferrer" className="footer-link">
-            GitHub
-          </a>
+          <a href="https://polymarket.com" target="_blank" rel="noopener noreferrer" className="footer-link">Polymarket</a>
+          <a href="https://github.com/lesoca1" target="_blank" rel="noopener noreferrer" className="footer-link">GitHub</a>
         </div>
       </footer>
     </main>
