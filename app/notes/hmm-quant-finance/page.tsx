@@ -315,14 +315,14 @@ export default function HmmNotePage() {
       <hr className="nav-rule" />
 
       <main className="page-content fade-in">
-        <h1 className="page-title">Hidden Markov Models for Quant Finance</h1>
+        <h1 className="page-title">Hidden Markov Models and Their Applications on Prediction Markets</h1>
         <div className="note-date">March 2026</div>
 
         <article className="note-content">
           <p>
             Notes and commentary on{" "}
             <a href="https://github.com/romanmichaelpaolucci/Quant-Guild-Library/blob/main/2025%20Video%20Lectures/51.%20Hidden%20Markov%20Models%20for%20Quant%20Finance/hidden_markov_models.ipynb" target="_blank" rel="noopener noreferrer">
-            Lecture 51 from Roman Paolucci&apos;s Quant Guild Library</a> — applying
+            Lecture 51 from Roman Paolucci&apos;s Quant Guild Library</a>, applying
             Hidden Markov Models to detect market regimes in equity returns. The companion{" "}
             <a href="https://www.mdpi.com/1911-8074/13/12/311" target="_blank" rel="noopener noreferrer">MDPI paper</a>{" "}
             provides the academic foundation.
@@ -330,16 +330,16 @@ export default function HmmNotePage() {
 
           <h3>The core idea</h3>
           <p>
-            Financial markets alternate between regimes — bull runs, bear crashes, and
-            sideways chop — but these states aren&apos;t directly observable. We only see
+            Financial markets alternate between regimes, bull runs, bear crashes, and
+            sideways chop, but these states aren&apos;t directly observable. We only see
             prices and volumes. A Hidden Markov Model treats the regime as a latent
             variable that influences the observable return distribution, and uses the
             Expectation-Maximization algorithm to learn:
           </p>
           <p>
-            (1) The <em>transition matrix</em> — probabilities of switching between regimes.<br/>
-            (2) The <em>emission parameters</em> — the mean and variance of returns in each regime.<br/>
-            (3) The <em>initial state distribution</em> — which regime we&apos;re likely starting in.
+            (1) The <em>transition matrix</em>: probabilities of switching between regimes.<br/>
+            (2) The <em>emission parameters</em>: the mean and variance of returns in each regime.<br/>
+            (3) The <em>initial state distribution</em>: which regime we&apos;re likely starting in.
           </p>
 
           <div className="chart-figure">
@@ -423,7 +423,7 @@ for i in range(model.n_components):
             After fitting, each state gets a label based on its characteristics. The state
             with the highest mean return and lowest volatility is typically the bull regime;
             the state with negative mean and high volatility is the bear/crisis regime.
-            The transition matrix tells you persistence — bear markets tend to be short
+            The transition matrix tells you persistence, bear markets tend to be short
             but violent, while bull regimes are longer and more stable.
           </p>
 
@@ -494,9 +494,9 @@ for i in range(model.n_components):
 
           <h3>Source material</h3>
           <p>
-            &bull; <a href="https://github.com/romanmichaelpaolucci/Quant-Guild-Library" target="_blank" rel="noopener noreferrer">Quant Guild Library</a> — full notebook and video lecture by Roman Paolucci.<br/>
+            &bull; <a href="https://github.com/romanmichaelpaolucci/Quant-Guild-Library" target="_blank" rel="noopener noreferrer">Quant Guild Library</a>: full notebook and video lecture by Roman Paolucci.<br/>
             &bull; <a href="https://www.mdpi.com/1911-8074/13/12/311" target="_blank" rel="noopener noreferrer">Regime-Switching Factor Investing with Hidden Markov Models</a> (Paolucci et al., MDPI 2020).<br/>
-            &bull; <a href="https://www.quantstart.com/articles/hidden-markov-models-an-introduction/" target="_blank" rel="noopener noreferrer">QuantStart HMM series</a> — excellent mathematical introduction.
+            &bull; <a href="https://www.quantstart.com/articles/hidden-markov-models-an-introduction/" target="_blank" rel="noopener noreferrer">QuantStart HMM series</a>: Mathematical introduction.
           </p>
         </article>
 

@@ -17,7 +17,7 @@ export const notes: Note[] = [
 
    {
     slug: "hmm-quant-finance",
-    title: "Hidden Markov Models for Quant Finance",
+    title: "Hidden Markov Models and Their Application on Prediction Markets",
     date: "March 2026",
     sortDate: "2026-03-19",
     description: "Notes on regime detection with Gaussian HMMs, based on Roman Paolucci's Quant Guild lecture.",
@@ -190,6 +190,17 @@ for i in range(model.n_components):
         &bull; <a href="https://www.mdpi.com/1911-8074/13/12/311" target="_blank" rel="noopener noreferrer">Regime-Switching Factor Investing with Hidden Markov Models</a> (Paolucci et al., MDPI 2020).<br/>
         &bull; <a href="https://www.quantstart.com/articles/hidden-markov-models-an-introduction/" target="_blank" rel="noopener noreferrer">QuantStart HMM series</a> — excellent mathematical introduction.
       </p>
+    `,
+  },
+
+   {
+    slug: "page.tsx",
+    title: "Testing",
+    date: "March 2026",
+    sortDate: "2026-03-17",
+    description: "Test.",
+    content: `
+Test case
     `,
   },
  

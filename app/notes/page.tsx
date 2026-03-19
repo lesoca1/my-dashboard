@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getAllNotes, type Note } from "@/app/lib/notes";
 
 export const metadata = {
-  title: "Notes — Leonardo Sorensen",
+  title: "Notes",
 };
 
 export default function NotesPage() {
