@@ -20,11 +20,11 @@ export default function AlgotradingPage() {
       <hr className="nav-rule" />
 
       <main className="page-content fade-in">
-        <h1 className="page-title">AlgoTrading Bots</h1>
+        <h1 className="page-title">Bots</h1>
         <p className="ab-desc">
           Each card below represents a wallet controlled by a different trading
-          bot. Click on any bot to view its live performance — positions, P&L,
-          and trade history — pulled directly from Polymarket.
+          bot. Click on any bot to view its live performance, positions, P&L,
+          and trade history, pulled from Polymarket.
         </p>
 
         <div className="ab-grid">
