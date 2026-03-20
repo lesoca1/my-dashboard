@@ -26,25 +26,12 @@ export const bots: Bot[] = [
   // ── Example bots (replace with your real wallet addresses) ──────────
   {
     id: "momentum-alpha",
-    name: "Momentum Alpha",
-    strategy: "Buys markets trending upward with strong volume confirmation.",
-    wallet: "0x0000000000000000000000000000000000000001",
+    name: "Test 1",
+    strategy: "Momentum Strategy: Buys markets trending upward with strong volume confirmation.",
+    wallet: "Input Account Address (e.g. 0x00000...)",
     status: "active",
   },
-  {
-    id: "mean-reversion",
-    name: "Mean Reversion",
-    strategy: "Bets on prices reverting to historical averages after sharp moves.",
-    wallet: "0x0000000000000000000000000000000000000002",
-    status: "paused",
-  },
-  {
-    id: "sentiment-scanner",
-    name: "Sentiment Scanner",
-    strategy: "Uses news & social sentiment signals to enter early positions.",
-    wallet: "0x0000000000000000000000000000000000000003",
-    status: "stopped",
-  },
+
 ];
 
 export function getBotById(id: string): Bot | undefined {
