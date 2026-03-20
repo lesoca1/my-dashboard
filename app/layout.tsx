@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Leonardo Sorensen",
+  title: "AlgoTrade",
   description: "Personal notes, projects, and prediction market analysis.",
 };
 
