@@ -27,6 +27,7 @@ export default function Nav() {
     { href: "/", label: "Home" },
     { href: "/notes", label: "Notes" },
     { href: "/tracker", label: "Tracker" },
+    { href: "/algotrading", label: "AlgoTrading Bots" },
   ];
 
   return (
