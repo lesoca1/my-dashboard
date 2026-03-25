@@ -21,11 +21,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for session cookie (new auth) or legacy site_auth cookie
+  // Check for valid session cookie
   const sessionCookie = request.cookies.get("session");
-  const legacyCookie = request.cookies.get("site_auth");
 
-  if (sessionCookie?.value || legacyCookie?.value === "authenticated") {
+  if (sessionCookie?.value) {
     return NextResponse.next();
   }
 
