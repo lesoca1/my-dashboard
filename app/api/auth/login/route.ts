@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "crypto";
 import { verifyPassword } from "@/app/lib/password";
 import { getUserByUsername, createSession } from "@/app/lib/db";
 

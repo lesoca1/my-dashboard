@@ -1,12 +1,26 @@
 import fs from "fs";
 import path from "path";
 
-// In production (serverless), the project directory is read-only.
-// Use /tmp for writable storage. Locally, use the project's data/ dir.
-const DATA_DIR =
-  process.env.NODE_ENV === "production"
-    ? path.join("/tmp", "data")
-    : path.join(process.cwd(), "data");
+// Determine a writable data directory. The project's data/ dir is preferred
+// (works in local dev and persistent-disk deployments), but serverless
+// platforms make the project directory read-only. Fall back to /tmp/data.
+function resolveDataDir(): string {
+  const projectDir = path.join(process.cwd(), "data");
+  try {
+    fs.mkdirSync(projectDir, { recursive: true });
+    // Test that we can actually write
+    const testFile = path.join(projectDir, ".write-test");
+    fs.writeFileSync(testFile, "ok");
+    fs.unlinkSync(testFile);
+    return projectDir;
+  } catch {
+    const tmpDir = path.join("/tmp", "data");
+    fs.mkdirSync(tmpDir, { recursive: true });
+    return tmpDir;
+  }
+}
+
+const DATA_DIR = resolveDataDir();
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
