@@ -3,14 +3,15 @@ import type { NextRequest } from "next/server";
 
 /**
  * This middleware runs on EVERY request.
- * If the user doesn't have a valid auth cookie, they get redirected to /login.
+ * If the user doesn't have a valid session cookie, they get redirected to /login.
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Always allow access to the login page, the login API, and static files
+  // Always allow access to login/register pages, auth APIs, and static files
   if (
     pathname === "/login" ||
+    pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/login") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
@@ -20,10 +21,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for the auth cookie
-  const authCookie = request.cookies.get("site_auth");
+  // Check for session cookie (new auth) or legacy site_auth cookie
+  const sessionCookie = request.cookies.get("session");
+  const legacyCookie = request.cookies.get("site_auth");
 
-  if (authCookie?.value === "authenticated") {
+  if (sessionCookie?.value || legacyCookie?.value === "authenticated") {
     return NextResponse.next();
   }
 
