@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * This middleware runs on EVERY request.
+ * This proxy runs on EVERY request.
  * If the user doesn't have a valid session cookie, they get redirected to /login.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Always allow access to login/register pages, auth APIs, and static files
@@ -35,6 +35,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run middleware on all routes
   matcher: ["/((?!_next/static|_next/image).*)"],
 };

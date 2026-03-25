@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
+import { hashPassword } from "@/app/lib/password";
 import { getUserByUsername, createUser, createSession } from "@/app/lib/db";
 
 export async function POST(request: Request) {
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
       adminSecret === process.env.ADMIN_SECRET;
 
     const userId = crypto.randomUUID();
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
 
     createUser({
       id: userId,
@@ -79,10 +78,12 @@ export async function POST(request: Request) {
     response.cookies.delete("site_auth");
 
     return response;
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Register error:", message);
     return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400 }
+      { error: `Registration failed: ${message}` },
+      { status: 500 }
     );
   }
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
+import { verifyPassword } from "@/app/lib/password";
 import { getUserByUsername, createSession } from "@/app/lib/db";
 
 export async function POST(request: Request) {
@@ -22,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
+    const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       return NextResponse.json(
         { error: "Invalid username or password" },
@@ -49,10 +48,12 @@ export async function POST(request: Request) {
     response.cookies.delete("site_auth");
 
     return response;
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Login error:", message);
     return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400 }
+      { error: `Login failed: ${message}` },
+      { status: 500 }
     );
   }
 }
