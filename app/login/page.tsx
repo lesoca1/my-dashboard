@@ -40,7 +40,7 @@ export default function LoginPage() {
         router.push("/");
         router.refresh();
       } else {
-        setError(data.detail || data.error || "Something went wrong.");
+        setError(data.error || "Something went wrong.");
       }
     } catch {
       setError("Something went wrong. Try again.");
