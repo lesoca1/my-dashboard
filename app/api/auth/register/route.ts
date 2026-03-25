@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
+import { randomUUID } from "node:crypto";
+import { hashPassword } from "@/app/lib/password";
 import { getUserByUsername, createUser, createSession } from "@/app/lib/db";
 
 export async function POST(request: Request) {
@@ -47,8 +47,8 @@ export async function POST(request: Request) {
       !!process.env.ADMIN_SECRET &&
       adminSecret === process.env.ADMIN_SECRET;
 
-    const userId = crypto.randomUUID();
-    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = randomUUID();
+    const passwordHash = await hashPassword(password);
 
     createUser({
       id: userId,
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
     });
 
-    const token = crypto.randomUUID();
+    const token = randomUUID();
     createSession(token, userId);
 
     const response = NextResponse.json({
