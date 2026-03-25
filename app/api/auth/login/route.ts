@@ -49,9 +49,10 @@ export async function POST(request: Request) {
     response.cookies.delete("site_auth");
 
     return response;
-  } catch {
+  } catch (err) {
+    console.error("Login error:", err);
     return NextResponse.json(
-      { error: "Invalid request" },
+      { error: "Invalid request", detail: String(err) },
       { status: 400 }
     );
   }
