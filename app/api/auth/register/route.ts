@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error("Register error:", err);
     return NextResponse.json(
-      { error: "Invalid request", detail: String(err) },
+      { error: "Invalid request" },
       { status: 400 }
     );
   }
