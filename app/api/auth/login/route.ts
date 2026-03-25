@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 import { verifyPassword } from "@/app/lib/password";
 import { getUserByUsername, createSession } from "@/app/lib/db";
 
@@ -30,7 +29,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = randomUUID();
+    const token = crypto.randomUUID();
     createSession(token, user.id);
 
     const response = NextResponse.json({
@@ -50,10 +49,11 @@ export async function POST(request: Request) {
 
     return response;
   } catch (err) {
-    console.error("Login error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Login error:", message);
     return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400 }
+      { error: `Login failed: ${message}` },
+      { status: 500 }
     );
   }
 }
