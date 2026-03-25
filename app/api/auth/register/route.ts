@@ -80,9 +80,10 @@ export async function POST(request: Request) {
 
     return response;
   } catch (err) {
-    console.error("Register error:", err);
+    console.error("Register error:", err instanceof Error ? err.message : err);
+    console.error("Register stack:", err instanceof Error ? err.stack : "no stack");
     return NextResponse.json(
-      { error: "Invalid request" },
+      { error: "Invalid request", detail: err instanceof Error ? err.message : String(err) },
       { status: 400 }
     );
   }
