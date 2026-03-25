@@ -1,7 +1,12 @@
 import fs from "fs";
 import path from "path";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// In production (serverless), the project directory is read-only.
+// Use /tmp for writable storage. Locally, use the project's data/ dir.
+const DATA_DIR =
+  process.env.NODE_ENV === "production"
+    ? path.join("/tmp", "data")
+    : path.join(process.cwd(), "data");
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
